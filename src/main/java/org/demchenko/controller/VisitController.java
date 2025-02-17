@@ -29,7 +29,7 @@ public class VisitController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) List<Long> doctorIds) {
+            @RequestParam(required = false) String doctorIds) {
 
         PaginatedResponse response = visitService.getPatients(page, size, search, doctorIds);
         return ResponseEntity.ok(response);

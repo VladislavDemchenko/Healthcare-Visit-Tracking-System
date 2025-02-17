@@ -16,10 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -31,6 +28,10 @@ public class VisitService {
     private final DoctorRepository doctorRepository;
 
     public void createVisit(CreateVisitRequest request) {
+
+        Patients patients = patientRepository.findById(request.patientId())
+                .orElseThrow(() -> new NotFoundException("Patient not found"));
+
         Doctor doctor = doctorRepository.findById(request.doctorId()
                 )
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
@@ -47,9 +48,6 @@ public class VisitService {
             throw new BadRequestException("Doctor already has a visit scheduled for this time");
         }
 
-        Patients patients = patientRepository.findById(request.patientId())
-                .orElseThrow(() -> new NotFoundException("Patient not found"));
-
         Visit visit = new Visit();
         visit.setStartDateTime(start);
         visit.setEndDateTime(end);
@@ -59,7 +57,10 @@ public class VisitService {
         visitRepository.save(visit);
     }
 
-    public PaginatedResponse getPatients(int page, int size, String search, List<Long> doctorIds) {
+    public PaginatedResponse getPatients(int page, int size, String search, String doctorIds) {
+
+        List<Long> doctorIdList = parseCommaSeparatedLongs(doctorIds);
+
         List<Object[]> patientsData = patientRepository.findPatientsWithFilters(
                 search, doctorIds, page * size, size);
 
@@ -67,7 +68,7 @@ public class VisitService {
             return new PaginatedResponse(Collections.emptyList(), 0);
         }
 
-        Map<Long, Long> doctorPatientCounts = doctorRepository.countTotalPatientsByDoctorIds(doctorIds)
+        Map<Long, Long> doctorPatientCounts = doctorRepository.countTotalPatientsByDoctorIds(doctorIdList)
                 .stream()
                 .collect(Collectors.toMap(
                         row -> (Long) row[0], //doctor id
@@ -78,19 +79,23 @@ public class VisitService {
         long totalCount = 0;
 
         for (Object[] row : patientsData) {
-            Patients patients = (Patients) row[0];
+            Long patientId = ((Number) row[0]).longValue();
+            String firstName = (String) row[1];
+            String lastName = (String) row[2];
             if (totalCount == 0) {
-                totalCount = (Long) row[1];
+                totalCount = ((Number) row[3]).longValue();
             }
 
             List<Visit> lastVisits = visitRepository.findLastVisitsForPatientByDoctors(
-                    patients.getId(), doctorIds);
+                    patientId, doctorIdList);
 
-            PatientResponse response = new PatientResponse(patients.getFirstName(),
-                    patients.getLastName(),
+            PatientResponse response = new PatientResponse(
+                    firstName,
+                    lastName,
                     lastVisits.stream()
                             .map(visit -> mapToVisitDTO(visit, doctorPatientCounts))
-                            .collect(Collectors.toList()));
+                            .collect(Collectors.toList())
+            );
 
             patientResponses.add(response);
         }
@@ -101,22 +106,35 @@ public class VisitService {
     private VisitDto mapToVisitDTO(Visit visit, Map<Long, Long> doctorPatientCounts) {
         ZoneId doctorZone = ZoneId.of(visit.getDoctor().getTimezone());
 
-        VisitDto dto = new VisitDto();
-        dto.setStart(visit.getStartDateTime()
-                .atZone(ZoneId.systemDefault())
-                .withZoneSameInstant(doctorZone)
-                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-
-        dto.setEnd(visit.getEndDateTime()
-                .atZone(ZoneId.systemDefault())
-                .withZoneSameInstant(doctorZone)
-                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-
-        DoctorDto doctorDTO = new DoctorDTO(visit.getDoctor().getFirstName(),
+        DoctorDto doctorDTO = new DoctorDto(visit.getDoctor().getFirstName(),
                 visit.getDoctor().getLastName(),
                 doctorPatientCounts.getOrDefault(visit.getDoctor().getId(), 0L));
 
-        dto.setDoctor(doctorDTO);
-        return dto;
+        return new VisitDto(
+                visit.getStartDateTime()
+                        .atZone(ZoneId.systemDefault())
+                        .withZoneSameInstant(doctorZone)
+                        .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                visit.getEndDateTime()
+                        .atZone(ZoneId.systemDefault())
+                        .withZoneSameInstant(doctorZone)
+                        .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                doctorDTO
+        );
+    }
+
+    public static List<Long> parseCommaSeparatedLongs(String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return Arrays.stream(input.split(","))
+                    .map(String::trim)
+                    .map(Long::parseLong)
+                    .collect(Collectors.toList());
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("Invalid number format in list: " + input);
+        }
     }
 }
