@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.demchenko.dto.CreateVisitRequest;
 import org.demchenko.dto.PaginatedResponse;
 import org.demchenko.service.VisitService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,7 +27,7 @@ public class VisitController {
     public ResponseEntity<PaginatedResponse> getPatients(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String search,
+            @RequestParam(required = false) List<String> search,
             @RequestParam(required = false) List<Long> doctorIds) {
 
         PaginatedResponse response = visitService.getPatients(page, size, search, doctorIds);

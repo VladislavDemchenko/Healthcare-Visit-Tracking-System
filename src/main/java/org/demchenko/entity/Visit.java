@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Getter
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_doctor_datetime", columnList = "doctor_id,start_date_time,end_date_time"),
                 @Index(name = "idx_patient_doctor", columnList = "patient_id,doctor_id")
         })
-public class Visit {
+public class Visit implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
