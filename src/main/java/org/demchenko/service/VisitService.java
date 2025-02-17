@@ -8,9 +8,11 @@ import org.demchenko.entity.Patients;
 import org.demchenko.entity.Visit;
 import org.demchenko.exception.BadRequestException;
 import org.demchenko.exception.NotFoundException;
+import org.demchenko.repository.CustomPatientRepository;
 import org.demchenko.repository.DoctorRepository;
 import org.demchenko.repository.PatientRepository;
 import org.demchenko.repository.VisitRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,6 +28,7 @@ public class VisitService {
     private final VisitRepository visitRepository;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
+    private final CustomPatientRepository customPatientRepository;
 
     public void createVisit(CreateVisitRequest request) {
 
@@ -57,18 +60,16 @@ public class VisitService {
         visitRepository.save(visit);
     }
 
-    public PaginatedResponse getPatients(int page, int size, String search, String doctorIds) {
+    @Cacheable(value = "patientsCache", key = "{#page, #size, #search, #doctorIds}")
+    public PaginatedResponse getPatients(int page, int size, List<String> search, List<Long> doctorIds) {
 
-        List<Long> doctorIdList = parseCommaSeparatedLongs(doctorIds);
-
-        List<Object[]> patientsData = patientRepository.findPatientsWithFilters(
-                search, doctorIds, page * size, size);
+        List<Object[]> patientsData = customPatientRepository.findPatientsWithFilters(search, doctorIds, page * size, size);
 
         if (patientsData.isEmpty()) {
-            return new PaginatedResponse(Collections.emptyList(), 0);
+            return new PaginatedResponse(Collections.emptyList(), 0L);
         }
 
-        Map<Long, Long> doctorPatientCounts = doctorRepository.countTotalPatientsByDoctorIds(doctorIdList)
+        Map<Long, Long> doctorPatientCounts = doctorRepository.countTotalPatientsByDoctorIds(doctorIds)
                 .stream()
                 .collect(Collectors.toMap(
                         row -> (Long) row[0], //doctor id
@@ -87,7 +88,7 @@ public class VisitService {
             }
 
             List<Visit> lastVisits = visitRepository.findLastVisitsForPatientByDoctors(
-                    patientId, doctorIdList);
+                    patientId, doctorIds);
 
             PatientResponse response = new PatientResponse(
                     firstName,
@@ -121,20 +122,5 @@ public class VisitService {
                         .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 doctorDTO
         );
-    }
-
-    public static List<Long> parseCommaSeparatedLongs(String input) {
-        if (input == null || input.trim().isEmpty()) {
-            return null;
-        }
-
-        try {
-            return Arrays.stream(input.split(","))
-                    .map(String::trim)
-                    .map(Long::parseLong)
-                    .collect(Collectors.toList());
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("Invalid number format in list: " + input);
-        }
     }
 }

@@ -1,6 +1,7 @@
 package org.demchenko.repository;
 
 import org.demchenko.entity.Visit;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -18,6 +19,7 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
         """)
     boolean hasOverlappingVisit(Long doctorId, LocalDateTime start, LocalDateTime end);
 
+    @Cacheable(value = "lastVisitsCache", key = "#patientId")
     @Query("""
         SELECT v FROM Visit v
         WHERE v.patients.id = :patientId

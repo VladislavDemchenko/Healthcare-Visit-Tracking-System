@@ -1,4 +1,4 @@
 package org.demchenko.dto;
 
-public record DoctorDto(String firstName, String lastName, long totalPatients) {
+public record DoctorDto(String firstName, String lastName, Long totalPatients) {
 }
