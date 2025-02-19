@@ -1,4 +1,16 @@
 package org.demchenko.dto;
 
-public record DoctorDto(String firstName, String lastName, Long totalPatients) {
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.io.Serializable;
+
+@AllArgsConstructor
+@Getter
+@Setter
+public class DoctorDto implements Serializable {
+        private String firstName;
+        private String lastName;
+        private Long totalPatients;
 }

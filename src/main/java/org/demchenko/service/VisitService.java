@@ -12,6 +12,7 @@ import org.demchenko.repository.CustomPatientRepository;
 import org.demchenko.repository.DoctorRepository;
 import org.demchenko.repository.PatientRepository;
 import org.demchenko.repository.VisitRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -31,22 +32,21 @@ public class VisitService {
 
     public void createVisit(CreateVisitRequest request) {
 
-        Patients patients = patientRepository.findById(request.patientId())
+        Patients patients = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new NotFoundException("Patient not found"));
 
-        Doctor doctor = doctorRepository.findById(request.doctorId()
-                )
+        Doctor doctor = doctorRepository.findById(request.getDoctorId())
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
 
         ZoneId doctorZone = ZoneId.of(doctor.getTimezone());
-        LocalDateTime start = LocalDateTime.parse(request.start())
+        LocalDateTime start = LocalDateTime.parse(request.getStart())
                 .atZone(doctorZone)
                 .toLocalDateTime();
-        LocalDateTime end = LocalDateTime.parse(request.end())
+        LocalDateTime end = LocalDateTime.parse(request.getEnd())
                 .atZone(doctorZone)
                 .toLocalDateTime();
 
-        if (visitRepository.hasOverlappingVisit(request.doctorId(), start, end)) {
+        if (visitRepository.hasOverlappingVisit(request.getDoctorId(), start, end)) {
             throw new BadRequestException("Doctor already has a visit scheduled for this time");
         }
 
@@ -58,7 +58,7 @@ public class VisitService {
 
         visitRepository.save(visit);
     }
-
+    @Cacheable("patients")
     public PaginatedResponse getPatients(int page, int size, List<String> search, List<Long> doctorIds) {
 
         List<Object[]> patientsData = customPatientRepository.findPatientsWithFilters(search, doctorIds, page * size, size);
