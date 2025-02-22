@@ -20,15 +20,14 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
 
     @Query("""
         SELECT v FROM Visit v
-        WHERE v.patients.id = :patientId
+        WHERE v.patient.id IN :patientIds
         AND v.doctor.id IN :doctorIds
-        AND v.id IN (
-            SELECT MAX(v2.id)
-            FROM Visit v2
-            WHERE v2.patients.id = :patientId
-            AND v2.doctor.id IN :doctorIds
-            GROUP BY v2.doctor.id
-        )
         """)
-    List<Visit> findLastVisitsForPatientByDoctors(Long patientId, List<Long> doctorIds);
+    List<Visit> findVisitsForPatientsAndDoctors(List<Long> patientIds, List<Long> doctorIds);
+
+    @Query("""
+        SELECT v FROM Visit v
+        WHERE v.patient.id IN :patientIds
+        """)
+    List<Visit> findVisitsForPatients(List<Long> patientIds);
 }

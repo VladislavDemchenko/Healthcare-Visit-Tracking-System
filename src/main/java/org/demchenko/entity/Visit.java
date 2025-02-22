@@ -30,7 +30,7 @@ public class Visit implements Serializable {
 
     @ManyToOne
     @JoinColumn(name = "patient_id", nullable = false)
-    private Patients patients;
+    private Patient patient;
 
     @ManyToOne
     @JoinColumn(name = "doctor_id", nullable = false)

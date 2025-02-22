@@ -4,7 +4,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.demchenko.dto.*;
 import org.demchenko.entity.Doctor;
-import org.demchenko.entity.Patients;
+import org.demchenko.entity.Patient;
 import org.demchenko.entity.Visit;
 import org.demchenko.exception.BadRequestException;
 import org.demchenko.exception.NotFoundException;
@@ -12,6 +12,7 @@ import org.demchenko.repository.CustomPatientRepository;
 import org.demchenko.repository.DoctorRepository;
 import org.demchenko.repository.PatientRepository;
 import org.demchenko.repository.VisitRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -30,9 +31,11 @@ public class VisitService {
     private final DoctorRepository doctorRepository;
     private final CustomPatientRepository customPatientRepository;
 
+    // but if we will have some changes in db without service, we will have old data in cache
+    @CacheEvict(value = "patients", allEntries = true)
     public void createVisit(CreateVisitRequest request) {
 
-        Patients patients = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new NotFoundException("Patient not found"));
 
         Doctor doctor = doctorRepository.findById(request.getDoctorId())
@@ -53,53 +56,56 @@ public class VisitService {
         Visit visit = new Visit();
         visit.setStartDateTime(start);
         visit.setEndDateTime(end);
-        visit.setPatients(patients);
+        visit.setPatient(patient);
         visit.setDoctor(doctor);
 
         visitRepository.save(visit);
     }
     @Cacheable("patients")
     public PaginatedResponse getPatients(int page, int size, List<String> search, List<Long> doctorIds) {
-
-        List<Object[]> patientsData = customPatientRepository.findPatientsWithFilters(search, doctorIds, page * size, size);
+        List<PatientDto> patientsData = customPatientRepository.findPatientsWithFilters(search, doctorIds, page * size, size);
 
         if (patientsData.isEmpty()) {
-            return new PaginatedResponse(Collections.emptyList(), 0L);
+            return new PaginatedResponse(Collections.emptyList(), 0);
         }
 
-        Map<Long, Long> doctorPatientCounts = doctorRepository.countTotalPatientsByDoctorIds(doctorIds)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0], //doctor id
-                        row -> (Long) row[1]  //count of patients
-                ));
+        // All patients ids
+        List<Long> patientIds = patientsData.stream()
+                .map(PatientDto::getId)
+                .collect(Collectors.toList());
 
-        List<PatientResponse> patientResponses = new ArrayList<>();
-        long totalCount = 0;
+        // Visits of patients by doctor
+        List<Visit> visits = (doctorIds == null || doctorIds.isEmpty())
+                ? visitRepository.findVisitsForPatients(patientIds)
+                : visitRepository.findVisitsForPatientsAndDoctors(patientIds, doctorIds);
 
-        for (Object[] row : patientsData) {
-            Long patientId = ((Number) row[0]).longValue();
-            String firstName = (String) row[1];
-            String lastName = (String) row[2];
-            if (totalCount == 0) {
-                totalCount = ((Number) row[3]).longValue();
-            }
+        // Visits for all patients. Where kay is patient id and value is list of visits
+        Map<Long, List<Visit>> patientVisitsMap = visits.stream()
+                .collect(Collectors.groupingBy(visit -> visit.getPatient().getId()));
 
-            List<Visit> lastVisits = visitRepository.findLastVisitsForPatientByDoctors(
-                    patientId, doctorIds);
+        // Count of patients for each doctor. Where key is doctor id and value is count of patients
+        Map<Long, Long> doctorPatientCounts = (doctorIds == null || doctorIds.isEmpty())
+                ? doctorRepository.countTotalPatientsForAllDoctors()
+                    .stream()
+                    .collect(Collectors.toMap(DoctorPatientCounts::getDoctorId, DoctorPatientCounts::getPatientCount))
+                : doctorRepository.countTotalPatientsByDoctorIds(doctorIds)
+                    .stream()
+                    .collect(Collectors.toMap(DoctorPatientCounts::getDoctorId, DoctorPatientCounts::getPatientCount));
 
-            PatientResponse response = new PatientResponse(
-                    firstName,
-                    lastName,
-                    lastVisits.stream()
-                            .map(visit -> mapToVisitDTO(visit, doctorPatientCounts))
-                            .collect(Collectors.toList())
-            );
+        // Map patient data to response with visits
+        List<PatientResponse> patientResponses = patientsData.stream()
+                .map(patient -> new PatientResponse(
+                        patient.getFirstName(),
+                        patient.getLastName(),
 
-            patientResponses.add(response);
-        }
+                        patientVisitsMap.getOrDefault(patient.getId(), Collections.emptyList())
+                                .stream()
+                                .map(visit -> mapToVisitDTO(visit, doctorPatientCounts))
+                                .collect(Collectors.toList())
+                ))
+                .collect(Collectors.toList());
 
-        return new PaginatedResponse(patientResponses, totalCount);
+        return new PaginatedResponse(patientResponses, patientsData.size());
     }
 
     private VisitDto mapToVisitDTO(Visit visit, Map<Long, Long> doctorPatientCounts) {
