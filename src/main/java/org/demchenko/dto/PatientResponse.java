@@ -12,6 +12,8 @@ import java.util.List;
 @Getter
 @Setter
 public class PatientResponse implements Serializable {
+        private static final long serialVersionUID = 1L;
+
         private String firstName;
 
         private String lastName;

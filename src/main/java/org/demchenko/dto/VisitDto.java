@@ -11,6 +11,8 @@ import java.io.Serializable;
 @Setter
 @AllArgsConstructor
 public class VisitDto implements Serializable {
+        private static final long serialVersionUID = 1L;
+
         private String start;
         private String end;
         private DoctorDto doctor;

@@ -11,6 +11,8 @@ import java.util.List;
 @Getter
 @Setter
 public class PaginatedResponse implements Serializable {
+        private static final long serialVersionUID = 1L;
+
         private List<PatientResponse> data;
         private int count;
 }

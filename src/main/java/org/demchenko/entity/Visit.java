@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_patient_doctor", columnList = "patient_id,doctor_id")
         })
 public class Visit implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
